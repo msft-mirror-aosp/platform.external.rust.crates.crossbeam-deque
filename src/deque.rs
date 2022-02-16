@@ -1,3 +1,7 @@
+// TODO(@jeehoonkang): we mutates `batch_size` inside `for i in 0..batch_size {}`. It is difficult
+// to read because we're mutating the range bound.
+#![allow(clippy::mut_range_bound)]
+
 use std::cell::{Cell, UnsafeCell};
 use std::cmp;
 use std::fmt;
@@ -588,27 +592,6 @@ impl<T> Stealer<T> {
         b.wrapping_sub(f) <= 0
     }
 
-    /// Returns the number of tasks in the deque.
-    ///
-    /// ```
-    /// use crossbeam_deque::Worker;
-    ///
-    /// let w = Worker::new_lifo();
-    /// let s = w.stealer();
-    ///
-    /// assert_eq!(s.len(), 0);
-    /// w.push(1);
-    /// assert_eq!(s.len(), 1);
-    /// w.push(2);
-    /// assert_eq!(s.len(), 2);
-    /// ```
-    pub fn len(&self) -> usize {
-        let f = self.inner.front.load(Ordering::Acquire);
-        atomic::fence(Ordering::SeqCst);
-        let b = self.inner.back.load(Ordering::Acquire);
-        b.wrapping_sub(f).max(0) as usize
-    }
-
     /// Steals a task from the queue.
     ///
     /// # Examples
@@ -652,13 +635,11 @@ impl<T> Stealer<T> {
         let task = unsafe { buffer.deref().read(f) };
 
         // Try incrementing the front index to steal the task.
-        // If the buffer has been swapped or the increment fails, we retry.
-        if self.inner.buffer.load(Ordering::Acquire, guard) != buffer
-            || self
-                .inner
-                .front
-                .compare_exchange(f, f.wrapping_add(1), Ordering::SeqCst, Ordering::Relaxed)
-                .is_err()
+        if self
+            .inner
+            .front
+            .compare_exchange(f, f.wrapping_add(1), Ordering::SeqCst, Ordering::Relaxed)
+            .is_err()
         {
             // We didn't steal this task, forget it.
             mem::forget(task);
@@ -760,18 +741,16 @@ impl<T> Stealer<T> {
                 }
 
                 // Try incrementing the front index to steal the batch.
-                // If the buffer has been swapped or the increment fails, we retry.
-                if self.inner.buffer.load(Ordering::Acquire, guard) != buffer
-                    || self
-                        .inner
-                        .front
-                        .compare_exchange(
-                            f,
-                            f.wrapping_add(batch_size),
-                            Ordering::SeqCst,
-                            Ordering::Relaxed,
-                        )
-                        .is_err()
+                if self
+                    .inner
+                    .front
+                    .compare_exchange(
+                        f,
+                        f.wrapping_add(batch_size),
+                        Ordering::SeqCst,
+                        Ordering::Relaxed,
+                    )
+                    .is_err()
                 {
                     return Steal::Retry;
                 }
@@ -781,12 +760,7 @@ impl<T> Stealer<T> {
 
             // Steal a batch of tasks from the front one by one.
             Flavor::Lifo => {
-                // This loop may modify the batch_size, which triggers a clippy lint warning.
-                // Use a new variable to avoid the warning, and to make it clear we aren't
-                // modifying the loop exit condition during iteration.
-                let original_batch_size = batch_size;
-
-                for i in 0..original_batch_size {
+                for i in 0..batch_size {
                     // If this is not the first steal, check whether the queue is empty.
                     if i > 0 {
                         // We've already got the current front index. Now execute the fence to
@@ -807,18 +781,11 @@ impl<T> Stealer<T> {
                     let task = unsafe { buffer.deref().read(f) };
 
                     // Try incrementing the front index to steal the task.
-                    // If the buffer has been swapped or the increment fails, we retry.
-                    if self.inner.buffer.load(Ordering::Acquire, guard) != buffer
-                        || self
-                            .inner
-                            .front
-                            .compare_exchange(
-                                f,
-                                f.wrapping_add(1),
-                                Ordering::SeqCst,
-                                Ordering::Relaxed,
-                            )
-                            .is_err()
+                    if self
+                        .inner
+                        .front
+                        .compare_exchange(f, f.wrapping_add(1), Ordering::SeqCst, Ordering::Relaxed)
+                        .is_err()
                     {
                         // We didn't steal this task, forget it and break from the loop.
                         mem::forget(task);
@@ -960,19 +927,17 @@ impl<T> Stealer<T> {
                     }
                 }
 
-                // Try incrementing the front index to steal the task.
-                // If the buffer has been swapped or the increment fails, we retry.
-                if self.inner.buffer.load(Ordering::Acquire, guard) != buffer
-                    || self
-                        .inner
-                        .front
-                        .compare_exchange(
-                            f,
-                            f.wrapping_add(batch_size + 1),
-                            Ordering::SeqCst,
-                            Ordering::Relaxed,
-                        )
-                        .is_err()
+                // Try incrementing the front index to steal the batch.
+                if self
+                    .inner
+                    .front
+                    .compare_exchange(
+                        f,
+                        f.wrapping_add(batch_size + 1),
+                        Ordering::SeqCst,
+                        Ordering::Relaxed,
+                    )
+                    .is_err()
                 {
                     // We didn't steal this task, forget it.
                     mem::forget(task);
@@ -1000,12 +965,7 @@ impl<T> Stealer<T> {
                 f = f.wrapping_add(1);
 
                 // Repeat the same procedure for the batch steals.
-                //
-                // This loop may modify the batch_size, which triggers a clippy lint warning.
-                // Use a new variable to avoid the warning, and to make it clear we aren't
-                // modifying the loop exit condition during iteration.
-                let original_batch_size = batch_size;
-                for i in 0..original_batch_size {
+                for i in 0..batch_size {
                     // We've already got the current front index. Now execute the fence to
                     // synchronize with other threads.
                     atomic::fence(Ordering::SeqCst);
@@ -1023,18 +983,11 @@ impl<T> Stealer<T> {
                     let tmp = unsafe { buffer.deref().read(f) };
 
                     // Try incrementing the front index to steal the task.
-                    // If the buffer has been swapped or the increment fails, we retry.
-                    if self.inner.buffer.load(Ordering::Acquire, guard) != buffer
-                        || self
-                            .inner
-                            .front
-                            .compare_exchange(
-                                f,
-                                f.wrapping_add(1),
-                                Ordering::SeqCst,
-                                Ordering::Relaxed,
-                            )
-                            .is_err()
+                    if self
+                        .inner
+                        .front
+                        .compare_exchange(f, f.wrapping_add(1), Ordering::SeqCst, Ordering::Relaxed)
+                        .is_err()
                     {
                         // We didn't steal this task, forget it and break from the loop.
                         mem::forget(tmp);
@@ -1414,9 +1367,7 @@ impl<T> Injector<T> {
 
             // Destroy the block if we've reached the end, or if another thread wanted to destroy
             // but couldn't because we were busy reading from the slot.
-            if (offset + 1 == BLOCK_CAP)
-                || (slot.state.fetch_or(READ, Ordering::AcqRel) & DESTROY != 0)
-            {
+            if (offset + 1 == BLOCK_CAP) || (slot.state.fetch_or(READ, Ordering::AcqRel) & DESTROY != 0) {
                 Block::destroy(block, offset);
             }
 
