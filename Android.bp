@@ -47,7 +47,7 @@ rust_test {
     crate_name: "fifo",
     cargo_env_compat: true,
     cargo_pkg_version: "0.8.5",
-    srcs: ["tests/fifo.rs"],
+    crate_root: "tests/fifo.rs",
     test_suites: ["general-tests"],
     auto_gen_config: true,
     test_options: {
@@ -72,7 +72,7 @@ rust_test {
     crate_name: "injector",
     cargo_env_compat: true,
     cargo_pkg_version: "0.8.5",
-    srcs: ["tests/injector.rs"],
+    crate_root: "tests/injector.rs",
     test_suites: ["general-tests"],
     auto_gen_config: true,
     test_options: {
@@ -97,7 +97,7 @@ rust_test {
     crate_name: "lifo",
     cargo_env_compat: true,
     cargo_pkg_version: "0.8.5",
-    srcs: ["tests/lifo.rs"],
+    crate_root: "tests/lifo.rs",
     test_suites: ["general-tests"],
     auto_gen_config: true,
     test_options: {
@@ -122,7 +122,7 @@ rust_test {
     crate_name: "steal",
     cargo_env_compat: true,
     cargo_pkg_version: "0.8.5",
-    srcs: ["tests/steal.rs"],
+    crate_root: "tests/steal.rs",
     test_suites: ["general-tests"],
     auto_gen_config: true,
     test_options: {
@@ -147,7 +147,7 @@ rust_library {
     crate_name: "crossbeam_deque",
     cargo_env_compat: true,
     cargo_pkg_version: "0.8.5",
-    srcs: ["src/lib.rs"],
+    crate_root: "src/lib.rs",
     edition: "2021",
     features: [
         "default",
